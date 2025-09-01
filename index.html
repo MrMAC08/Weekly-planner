@@ -839,6 +839,11 @@
         }
 
         function switchTab(tab) {
+            // FORCE SAVE before switching tabs
+            clearTimeout(window.subjectAutoSaveTimeout);
+            clearTimeout(window.autoSaveTimeout);
+            saveCurrentWeekData();
+            
             // Hide all tabs
             document.getElementById('scheduleTab').style.display = 'none';
             document.getElementById('subjectsTab').style.display = 'none';
@@ -965,30 +970,32 @@
         ];
 
         function setSubjectPlan(subject) {
-            // Force save current subject data before switching
-            if (currentSubject !== subject) {
-                clearTimeout(window.subjectAutoSaveTimeout);
-                saveCurrentWeekData();
-            }
+            // ALWAYS force save current subject data before switching
+            clearTimeout(window.subjectAutoSaveTimeout);
+            clearTimeout(window.autoSaveTimeout);
+            saveCurrentWeekData();
             
-            currentSubject = subject;
-            
-            // Update button styles
-            document.querySelectorAll('[id$="PlanBtn"]').forEach(btn => {
-                btn.className = btn.className.replace(' ring-2 ring-offset-2 ring-gray-400', '');
-            });
-            
-            const btnId = subject.toLowerCase().replace(/\s+/g, '').replace('the', '') + 'PlanBtn';
-            const btn = document.getElementById(btnId);
-            if (btn) {
-                btn.className += ' ring-2 ring-offset-2 ring-gray-400';
-            }
-            
-            // Update table header color based on subject
-            updatePlanningTableHeader(subject);
-            
-            // Load data for the new subject
-            loadSubjectData();
+            // Small delay to ensure save completes
+            setTimeout(() => {
+                currentSubject = subject;
+                
+                // Update button styles
+                document.querySelectorAll('[id$="PlanBtn"]').forEach(btn => {
+                    btn.className = btn.className.replace(' ring-2 ring-offset-2 ring-gray-400', '');
+                });
+                
+                const btnId = subject.toLowerCase().replace(/\s+/g, '').replace('the', '') + 'PlanBtn';
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.className += ' ring-2 ring-offset-2 ring-gray-400';
+                }
+                
+                // Update table header color based on subject
+                updatePlanningTableHeader(subject);
+                
+                // Load data for the new subject
+                loadSubjectData();
+            }, 100);
         }
         
         function updatePlanningTableHeader(subject) {
@@ -1963,6 +1970,26 @@
             window.subjectAutoSaveTimeout = setTimeout(saveCurrentWeekData, 500); // Reduced from 1000ms to 500ms
         }
 
+        // CRITICAL: Save data when user leaves the page
+        window.addEventListener('beforeunload', function(e) {
+            // Force save all data immediately
+            clearTimeout(window.subjectAutoSaveTimeout);
+            clearTimeout(window.autoSaveTimeout);
+            saveCurrentWeekData();
+        });
+
+        // Also save when page loses focus (switching tabs/apps)
+        window.addEventListener('blur', function() {
+            clearTimeout(window.subjectAutoSaveTimeout);
+            clearTimeout(window.autoSaveTimeout);
+            saveCurrentWeekData();
+        });
+
+        // Save every 10 seconds as backup
+        setInterval(function() {
+            saveCurrentWeekData();
+        }, 10000);
+
         // Initialize the planner
         updateWeekDates();
         generatePlannerGrid();
@@ -1978,5 +2005,5 @@
             loadWeekData();
         }, 100);
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'978231c673e3d9b7',t:'MTc1NjcwMjcyNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'978772919476d9be',t:'MTc1Njc1NzgwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
