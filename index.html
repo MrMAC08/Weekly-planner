@@ -314,6 +314,24 @@
 
                     <!-- Save Options at Bottom -->
                     <div class="mt-6 space-y-4">
+                        <!-- Data Backup & Recovery -->
+                        <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <h3 class="text-lg font-semibold text-yellow-800 mb-2">💾 Data Backup & Recovery</h3>
+                            <p class="text-sm text-yellow-700 mb-3">Backup your planning data or check what's currently saved:</p>
+                            <div class="flex gap-3 flex-wrap">
+                                <button onclick="exportAllData()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                    📤 Export All Data
+                                </button>
+                                <button onclick="showDataStatus()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                    📊 Check Data Status
+                                </button>
+                                <input type="file" id="importAllData" accept=".json" style="display: none;" onchange="importAllData(this)">
+                                <button onclick="document.getElementById('importAllData').click()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                    📥 Import Data
+                                </button>
+                            </div>
+                        </div>
+                        
                         <!-- Print/Save as PDF -->
                         <div class="p-4 bg-green-50 rounded-lg border border-green-200">
                             <h3 class="text-lg font-semibold text-green-800 mb-2">🖨️ Print or Save as PDF</h3>
@@ -1964,6 +1982,103 @@
             input.value = ''; // Clear the input
         }
 
+        // Data backup and recovery functions
+        function exportAllData() {
+            const allData = {
+                weeklyData: weeklyData,
+                globalRoutineData: globalRoutineData,
+                customSubjects: customSubjects,
+                importantLinks: importantLinks,
+                exportDate: new Date().toISOString(),
+                version: '1.0'
+            };
+            
+            const dataStr = JSON.stringify(allData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `weekly-planner-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            alert('✅ All data exported successfully! Keep this file safe as your backup.');
+        }
+
+        function importAllData(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    // Validate the data structure
+                    if (!importedData.weeklyData || !importedData.globalRoutineData) {
+                        throw new Error('Invalid backup file format');
+                    }
+                    
+                    const replace = confirm(`This will restore your planner data from the backup file.\n\n⚠️ WARNING: This will REPLACE all current data!\n\nClick OK to proceed, or Cancel to abort.`);
+                    
+                    if (replace) {
+                        // Restore all data
+                        weeklyData = importedData.weeklyData || {};
+                        globalRoutineData = importedData.globalRoutineData || {};
+                        customSubjects = importedData.customSubjects || [];
+                        importantLinks = importedData.importantLinks || [];
+                        
+                        // Save to localStorage
+                        localStorage.setItem('weeklyPlannerData', JSON.stringify(weeklyData));
+                        localStorage.setItem('globalRoutineData', JSON.stringify(globalRoutineData));
+                        localStorage.setItem('customSubjects', JSON.stringify(customSubjects));
+                        localStorage.setItem('importantLinks', JSON.stringify(importantLinks));
+                        
+                        // Refresh the interface
+                        renderSubjectButtons();
+                        renderLinks();
+                        loadWeekData();
+                        
+                        const exportDate = importedData.exportDate ? new Date(importedData.exportDate).toLocaleDateString() : 'Unknown';
+                        alert(`✅ Data restored successfully!\n\nBackup date: ${exportDate}\nWeeks restored: ${Object.keys(weeklyData).length}\nCustom subjects: ${customSubjects.length}\nImportant links: ${importantLinks.length}`);
+                    }
+                    
+                } catch (error) {
+                    alert('❌ Error importing data. Please check the file format.');
+                    console.error('Import error:', error);
+                }
+            };
+            
+            reader.readAsText(file);
+            input.value = ''; // Clear the input
+        }
+
+        function showDataStatus() {
+            const weekCount = Object.keys(weeklyData).length;
+            const currentWeekKey = getWeekKey();
+            const hasCurrentWeekData = weeklyData[currentWeekKey] ? 'Yes' : 'No';
+            
+            let subjectDataCount = 0;
+            Object.values(weeklyData).forEach(week => {
+                if (week.subjects) {
+                    subjectDataCount += Object.keys(week.subjects).length;
+                }
+            });
+            
+            const status = `📊 DATA STATUS REPORT
+            
+🗓️ Weeks with data: ${weekCount}
+📚 Subject planning entries: ${subjectDataCount}
+🔧 Custom subjects: ${customSubjects.length}
+🔗 Important links: ${importantLinks.length}
+📅 Current week (${currentWeekKey}) has data: ${hasCurrentWeekData}
+
+💾 Storage used: ${Math.round(JSON.stringify({weeklyData, globalRoutineData, customSubjects, importantLinks}).length / 1024)} KB
+
+${weekCount === 0 ? '⚠️ No planning data found! Make sure to enter some data and it will auto-save.' : '✅ Your data is being saved properly!'}`;
+            
+            alert(status);
+        }
+
         // Auto-save function for subject data - faster saving
         function autoSaveSubjectData() {
             clearTimeout(window.subjectAutoSaveTimeout);
@@ -1990,20 +2105,59 @@
             saveCurrentWeekData();
         }, 10000);
 
-        // Initialize the planner
-        updateWeekDates();
-        generatePlannerGrid();
-        updateGroupButtons();
-        renderLinks();
-        renderSubjectButtons(); // Render subject buttons with saved custom subjects
-        
-        // Set initial table header color for Maths (default subject)
-        updatePlanningTableHeader(currentSubject);
-        
-        // Load data for the current week after grid is generated
-        setTimeout(() => {
-            loadWeekData();
-        }, 100);
+        // Enhanced initialization with better error handling
+        function initializePlanner() {
+            try {
+                // Load saved data first
+                weeklyData = JSON.parse(localStorage.getItem('weeklyPlannerData') || '{}');
+                globalRoutineData = JSON.parse(localStorage.getItem('globalRoutineData') || '{}');
+                customSubjects = JSON.parse(localStorage.getItem('customSubjects') || '[]');
+                importantLinks = JSON.parse(localStorage.getItem('importantLinks') || '[]');
+                
+                console.log('Loaded data:', {
+                    weeklyDataKeys: Object.keys(weeklyData),
+                    customSubjects: customSubjects,
+                    linksCount: importantLinks.length
+                });
+                
+                updateWeekDates();
+                generatePlannerGrid();
+                updateGroupButtons();
+                renderLinks();
+                renderSubjectButtons();
+                
+                // Set initial table header color for Maths (default subject)
+                updatePlanningTableHeader(currentSubject);
+                
+                // Load data for the current week after everything is set up
+                setTimeout(() => {
+                    loadWeekData();
+                    console.log('Week data loaded for:', getWeekKey());
+                }, 200);
+                
+            } catch (error) {
+                console.error('Error initializing planner:', error);
+                // Reset to defaults if there's an error
+                weeklyData = {};
+                globalRoutineData = {};
+                customSubjects = [];
+                importantLinks = [];
+                
+                updateWeekDates();
+                generatePlannerGrid();
+                updateGroupButtons();
+                renderLinks();
+                renderSubjectButtons();
+                updatePlanningTableHeader(currentSubject);
+            }
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePlanner);
+        } else {
+            initializePlanner();
+        }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'978772919476d9be',t:'MTc1Njc1NzgwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9789f44aa253d9a8',t:'MTc1Njc4NDA5NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
